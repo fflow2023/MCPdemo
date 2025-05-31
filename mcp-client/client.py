@@ -15,15 +15,16 @@ load_dotenv()  # 加载环境变量
 
 class MCPClient:
     def __init__(self):
-        self.session: Optional[ClientSession] = None
+        self.sessions: List[ClientSession] = []  # 存储多个会话
         self.exit_stack = AsyncExitStack()
         self.http_client = httpx.AsyncClient()
         self.conversation_history: List[Dict[str, Any]] = []
-        self.available_tools = []
+        self.available_tools = []  # 现在会包含所有工具的JSON可序列化表示
+        self.tool_sessions: Dict[str, ClientSession] = {}  # 工具名到会话的映射
         self.tool_calls_history: List[Dict[str, Any]] = []
 
-    async def connect_to_server(self, server_script_path: str):
-        """连接MCP服务器"""
+    async def connect_to_server(self, server_script_path: str) -> List[Dict]:
+        """连接MCP服务器并返回工具列表"""
         is_python = server_script_path.endswith('.py')
         is_js = server_script_path.endswith('.js')
         
@@ -38,24 +39,45 @@ class MCPClient:
         )
         
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+        stdio, write = stdio_transport
+        session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
         
-        await self.session.initialize()
+        await session.initialize()
         
-        # 获取可用工具列表
-        response = await self.session.list_tools()
-        self.available_tools = [{
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema
+        # 添加到会话列表
+        self.sessions.append(session)
+        
+        # 获取当前服务器的工具列表
+        response = await session.list_tools()
+        
+        # 创建纯字典结构的工具列表，用于API调用
+        tools = []
+        for tool in response.tools:
+            tool_dict = {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema
+                }
             }
-        } for tool in response.tools]
+            tools.append(tool_dict)
+            
+            # 存储工具名到会话的映射
+            self.tool_sessions[tool.name] = session
         
-        print("\n连接的服务器工具:", [tool['function']['name'] for tool in self.available_tools])
-        return self.available_tools
+        return tools
+
+    async def call_tool(self, tool_name: str, arguments: Any) -> Any:
+        """在适当的服务器上调用工具"""
+        # 查找匹配的工具会话
+        session = self.tool_sessions.get(tool_name)
+        
+        if not session:
+            raise ValueError(f"未找到工具: {tool_name}")
+        
+        # 调用工具
+        return await session.call_tool(tool_name, arguments)
 
     async def call_deepseek_api_stream(self, messages: List[Dict]) -> AsyncGenerator[Dict, None]:
         """调用DeepSeek API流式接口"""
@@ -94,127 +116,6 @@ class MCPClient:
                                 continue
         except Exception as e:
             yield {"error": str(e)}
-
-    # async def process_query_stream(self, query: str) -> AsyncGenerator[Dict, None]:
-    #     """流式处理用户查询"""
-    #     self.conversation_history.append({"role": "user", "content": query})
-    #     current_message = {"role": "assistant", "content": ""}
-    #     tool_calls_collected = []
-        
-    #     # 处理流式响应
-    #     async for chunk in self.call_deepseek_api_stream(self.conversation_history):
-    #         if "error" in chunk:
-    #             yield {"type": "error", "data": chunk["error"]}
-    #             return
-                
-    #         for choice in chunk.get("choices", []):
-    #             if "delta" not in choice:
-    #                 continue
-                    
-    #             delta = choice["delta"]
-                
-    #             # 处理内容增量
-    #             if "content" in delta and delta["content"] is not None:
-    #                 content = delta["content"]
-    #                 current_message["content"] += content
-    #                 yield {"type": "text_chunk", "data": content}
-                
-    #             # 收集工具调用
-    #             if "tool_calls" in delta:
-    #                 tool_call = delta["tool_calls"][0]
-    #                 if "index" in tool_call and tool_call["index"] >= len(tool_calls_collected):
-    #                     tool_calls_collected.append({
-    #                         "id": tool_call.get("id"),
-    #                         "name": "",
-    #                         "arguments": ""
-    #                     })
-                    
-    #                 # 更新工具调用参数
-    #                 if tool_call["index"] < len(tool_calls_collected):
-    #                     current_tool = tool_calls_collected[tool_call["index"]]
-    #                     function = tool_call.get("function", {})
-    #                     if "name" in function:
-    #                         current_tool["name"] = function.get("name")
-    #                     if "arguments" in function:
-    #                         current_tool["arguments"] += function["arguments"]
-        
-    #     # 保存完整消息
-    #     self.conversation_history.append(current_message)
-        
-    #     # 处理工具调用
-    #     if tool_calls_collected:
-    #         for tool_call in tool_calls_collected:
-    #             try:
-    #                 # 发送工具调用开始事件
-    #                 yield {
-    #                     "type": "tool_call_start", 
-    #                     "data": {
-    #                         "name": tool_call["name"],
-    #                         "args": tool_call["arguments"]
-    #                     }
-    #                 }
-                    
-    #                 # 执行工具调用
-    #                 arguments = tool_call["arguments"]
-    #                 if arguments:
-    #                     try:
-    #                         arguments = json.loads(arguments)
-    #                     except json.JSONDecodeError:
-    #                         pass
-                        
-    #                 tool_result = await self.session.call_tool(tool_call["name"], arguments)
-                    
-    #                 # 解析工具结果
-    #                 if hasattr(tool_result.content, 'text'):
-    #                     tool_content = tool_result.content.text
-    #                 elif isinstance(tool_result.content, dict) and 'text' in tool_result.content:
-    #                     tool_content = tool_result.content['text']
-    #                 else:
-    #                     tool_content = str(tool_result.content)
-                    
-    #                 tool_content = tool_content.replace("\\n", "\n").replace("\\'", "'")
-                    
-    #                 # 添加到工具调用历史
-    #                 tool_data = {
-    #                     "name": tool_call["name"],
-    #                     "arguments": tool_call["arguments"],
-    #                     "result": tool_content,
-    #                     "success": True
-    #                 }
-    #                 self.tool_calls_history.append(tool_data)
-                    
-    #                 # 发送工具调用结果
-    #                 yield {"type": "tool_call_result", "data": tool_content}
-                    
-    #                 # 添加到对话历史
-    #                 self.conversation_history.append({
-    #                     "role": "tool",
-    #                     "content": tool_content,
-    #                     "tool_call_id": tool_call["id"]
-    #                 })
-                    
-    #             except Exception as e:
-    #                 error_msg = f"工具调用失败: {str(e)}"
-    #                 self.tool_calls_history.append({
-    #                     "name": tool_call["name"],
-    #                     "arguments": tool_call["arguments"],
-    #                     "result": error_msg,
-    #                     "success": False
-    #                 })
-    #                 yield {"type": "tool_call_error", "data": error_msg}
-        
-    #     if self.conversation_history[-1]["role"] == "tool":
-    #         current_message = {"role": "assistant", "content": ""}
-            
-    #         # 第二次调用API（使用更新后的对话历史）
-    #         async for chunk in self.call_deepseek_api_stream(self.conversation_history):
-    #             # ... [处理第二次流式响应，与第一次相同] ...
-                
-    #         # 保存第二次的完整消息
-    #             if current_message["content"]:
-    #                 self.conversation_history.append(current_message)
-    #     # 流式处理结束
-    #     yield {"type": "end"}
     async def process_query_stream(self, query: str) -> AsyncGenerator[Dict, None]:
         """流式处理用户查询"""
         self.conversation_history.append({"role": "user", "content": query})
@@ -282,8 +183,7 @@ class MCPClient:
                         except json.JSONDecodeError:
                             pass
                         
-                    tool_result = await self.session.call_tool(tool_call["name"], arguments)
-                    
+                    tool_result = await self.call_tool(tool_call["name"], arguments)
                     # 解析工具结果
                     if hasattr(tool_result.content, 'text'):
                         tool_content = tool_result.content.text

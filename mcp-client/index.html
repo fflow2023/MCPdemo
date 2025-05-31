@@ -11,7 +11,6 @@
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github-dark.min.css">
     <style>
-        /* 保持原有样式不变 */
         body {
             background-color: #1e1e2e;
             color: #cdd6f4;
@@ -50,7 +49,6 @@
             font-weight: 600;
         }
 
-        /* 调整参数显示样式 - 完整显示 */
         .tool-args {
             color: #6c7086;
             font-size: 0.9rem;
@@ -63,7 +61,6 @@
             overflow-y: auto;
         }
 
-        /* 调整结果显示样式 - 完整显示 */
         .tool-result {
             color: #a6e3a1;
             font-size: 0.85rem;
@@ -74,7 +71,6 @@
             background: #1e1e2e;
             border-radius: 4px;
             max-height: 150px;
-            /* 增加高度限制 */
             overflow-y: auto;
         }
 
@@ -236,6 +232,50 @@
 
         .hljs {
             background: transparent !important;
+        }
+
+        .tool-result-plain {
+            white-space: pre-wrap;
+            /* 保留空白序列，并在必要时换行 */
+            font-family: inherit;
+            /* 使用默认字体 */
+            font-size: 0.9rem;
+            /* 保持默认字号 */
+            line-height: 1.4;
+            /* 合理的行高 */
+            margin-top: 0.5rem;
+            /* 顶部间距 */
+            padding: 0.5rem;
+            /* 内边距 */
+
+            border-radius: 4px;
+            /* 圆角 */
+            border-left: 2px solid #585b70;
+            /* 左侧边框 */
+            overflow-x: auto;
+            /* 水平滚动 */
+            max-height: 300px;
+            /* 最大高度限制 */
+            overflow-y: auto;
+            /* 垂直滚动 */
+        }
+
+        .tool-result-plain::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .tool-result-plain::-webkit-scrollbar-track {
+            background: #181825;
+            border-radius: 4px;
+        }
+
+        .tool-result-plain::-webkit-scrollbar-thumb {
+            background: #313244;
+            border-radius: 4px;
+        }
+
+        .tool-result-plain::-webkit-scrollbar-thumb:hover {
+            background: #45475a;
         }
     </style>
 </head>
@@ -461,7 +501,9 @@
                     <div class="message-content">
                         <i class="fas fa-tools me-2"></i>
                         <strong>工具调用结果:</strong>
-                        ${marked.parse(content)}
+                        <div class="tool-result-plain">
+                            ${marked.parse(content)}
+                        </div>
                     </div>
                 `;
                 chatMessages.appendChild(messageDiv);

@@ -1,4 +1,4 @@
-# MCP\mcp-client\web_client.py
+# MCP\mcp-client\web.py
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,15 +25,33 @@ async def websocket_endpoint(websocket: WebSocket):
     tool_calls_info = []
     
     try:
-        # 连接服务
-        server_path = os.path.abspath(os.path.join("..", "tools", "weather.py"))
-        available_tools = await client.connect_to_server(server_path)
+        # 连接多个服务
+        tools_paths = [
+            os.path.abspath(os.path.join("..", "tools", "weather.py")),
+            os.path.abspath(os.path.join("..", "tools", "websearch.py"))
+        ]
+        
+        # 加载所有工具
+        all_tools = []
+        for path in tools_paths:
+            try:
+                tools_list = await client.connect_to_server(path)
+                all_tools.extend(tools_list)
+            except Exception as e:
+                error_msg = f"服务连接错误 {path}: {str(e)}"
+                await websocket.send_json({
+                    "type": "system",
+                    "data": error_msg
+                })
+        
+        # 设置客户端的工具列表（JSON可序列化的）
+        client.available_tools = all_tools
         
         # 发送初始信息
-        tools_list = [tool['function']['name'] for tool in available_tools]
+        tools_names = [tool['function']['name'] for tool in all_tools]
         await websocket.send_json({
             "type": "system",
-            "data": f"系统：当前可用工具：{', '.join(tools_list)}"
+            "data": f"系统：当前可用工具：{', '.join(tools_names)}"
         })
         
         async def send_tool_calls_update():
@@ -103,4 +121,4 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)

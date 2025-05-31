@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "appbuilder>=0.0.20191210.1",
+    "bs4>=0.0.2",
     "httpx>=0.28.1",
     "mcp[cli]>=1.8.1",
 ]
