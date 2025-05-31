@@ -322,11 +322,10 @@ class MCPClient:
                         "success": False
                     })
                     yield {"type": "tool_call_error", "data": error_msg}
-        yield {"type": "end"}
+            yield {"type": "end"}
         # 如果有工具调用结果，进行第二次API调用（总结）
         if self.conversation_history[-1]["role"] == "tool":
             current_message = {"role": "assistant", "content": ""}
-            
             # 第二次调用API（使用更新后的对话历史）
             async for chunk in self.call_deepseek_api_stream(self.conversation_history):
                 if "error" in chunk:

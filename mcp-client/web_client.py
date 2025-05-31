@@ -33,7 +33,7 @@ async def websocket_endpoint(websocket: WebSocket):
         tools_list = [tool['function']['name'] for tool in available_tools]
         await websocket.send_json({
             "type": "system",
-            "data": f"系统：已连接天气服务，可用工具：{', '.join(tools_list)}"
+            "data": f"系统：当前可用工具：{', '.join(tools_list)}"
         })
         
         async def send_tool_calls_update():
