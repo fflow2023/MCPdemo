@@ -1,93 +1,537 @@
+<!-- # mcp-client\index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
+
 <head>
-    <title>天气助手</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP 智能对话系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github-dark.min.css">
     <style>
         body {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            font-family: Arial, sans-serif;
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        #chat-box {
-            border: 1px solid #ccc;
-            height: 500px;
+
+        .chat-container {
+            height: 100vh;
+            max-width: 100%;
+            margin: 0;
+        }
+
+        .sidebar {
+            background-color: #181825;
+            border-right: 1px solid #313244;
+            height: 100vh;
             overflow-y: auto;
-            padding: 10px;
-            margin-bottom: 10px;
         }
-        .message {
-            margin: 10px 0;
+
+        .tool-call {
+            padding: 12px;
+            border-bottom: 1px solid #313244;
+            transition: all 0.3s ease;
+        }
+
+        .tool-call:hover {
+            background-color: #313244;
+        }
+
+        .tool-name {
+            color: #cba6f7;
+            font-weight: 600;
+        }
+
+        .tool-args {
+            color: #6c7086;
+            font-size: 0.9rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tool-result {
+            color: #a6e3a1;
+            font-size: 0.9rem;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 8px;
             padding: 8px;
-            border-radius: 5px;
-        }
-        .user-message {
-            background-color: #e3f2fd;
-        }
-        .bot-message {
-            background-color: #f5f5f5;
-        }
-        #input-box {
-            display: flex;
-            gap: 10px;
-        }
-        #query-input {
-            flex: 1;
-            padding: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
+            background: #1e1e2e;
             border-radius: 4px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <div id="chat-box"></div>
-    <div id="input-box">
-        <input type="text" id="query-input" placeholder="输入您的问题...">
-        <button onclick="sendQuery()">发送</button>
-    </div>
-
-    <script>
-
-        const ws = new WebSocket(`ws://${window.location.host}/ws`);
-        const chatBox = document.getElementById('chat-box');
-        const queryInput = document.getElementById('query-input');
-
-        // 消息处理
-        ws.onmessage = (event) => {
-            addMessage(event.data, 'bot');
-        };
-
-        // 添加消息到聊天框
-        function addMessage(text, sender) {
-            const div = document.createElement('div');
-            div.className = `message ${sender}-message`;
-            div.innerHTML = text.replace(/\n/g, '<br>');
-            chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // 发送查询
-        function sendQuery() {
-            const query = queryInput.value.trim();
-            if (query) {
-                addMessage(query, 'user');
-                ws.send(query);
-                queryInput.value = '';
+        .sidebar::-webkit-scrollbar,
+        .tool-result::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar::-webkit-scrollbar-track,
+        .tool-result::-webkit-scrollbar-track {
+            background: #181825;
+            border-radius: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb,
+        .tool-result::-webkit-scrollbar-thumb {
+            background: #313244;
+            border-radius: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .tool-result::-webkit-scrollbar-thumb:hover {
+            background: #45475a;
+        }
+
+        .tool-status {
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+
+        .processing-status {
+            color: #f9e2af;
+        }
+
+        .completed-status {
+            color: #a6e3a1;
+        }
+
+        .error-status {
+            color: #f38ba8;
+        }
+
+        .chat-messages {
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .user-message {
+            background-color: #313244;
+            margin-left: auto;
+        }
+
+        .assistant-message {
+            background-color: #45475a;
+        }
+
+        .tool-message {
+            background-color: #585b70;
+            border-left: 4px solid #f9e2af;
+        }
+
+        .message-content {
+            overflow-wrap: break-word;
+        }
+
+        .chat-input {
+            position: fixed;
+            bottom: 0;
+            width: calc(100% - 320px);
+            background: #181825;
+            padding: 15px;
+            border-top: 1px solid #313244;
+        }
+
+        .form-control {
+            background-color: #313244;
+            border: none;
+            color: #cdd6f4;
+        }
+
+        .form-control:focus {
+            background-color: #45475a;
+            color: #cdd6f4;
+            box-shadow: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
 
-        // 回车发送
-        queryInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendQuery();
-        });
+        .highlight {
+            border: 1px solid #cba6f7;
+            box-shadow: 0 0 10px rgba(203, 166, 247, 0.5);
+        }
 
-        
+        .disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid chat-container">
+        <div class="row">
+            <!-- 侧边栏: 工具调用信息 -->
+            <div class="col-md-3 col-lg-2 sidebar p-0">
+                <div class="p-3 border-bottom">
+                    <h4>工具调用记录</h4>
+                    <small class="text-muted">显示调用的工具和结果</small>
+                </div>
+                <div id="tool-calls-container"></div>
+            </div>
+
+            <!-- 主聊天区 -->
+            <div class="col-md-9 col-lg-10 px-0 position-relative">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="message-input" placeholder="输入消息..."
+                            autocomplete="off">
+                        <button class="btn btn-primary" type="button" id="send-button">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            let isOutputting = false;  // 跟踪是否正在输出内容
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const chatMessages = document.getElementById('chat-messages');
+            const toolCallsContainer = document.getElementById('tool-calls-container');
+            let ws;
+            let streamedContent = '';
+            let currentMessageDiv = null;
+            let bufferTimer = null;
+
+            // 连接到WebSocket
+            function connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log('WebSocket连接已建立');
+                    addSystemMessage('系统：已连接到服务器');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('收到消息:', data);
+                        // 开始输出时设置状态
+                        if (data.type === 'text_chunk' || data.type === 'tool_call_start') {
+                            isOutputting = true;
+                            updateInputState();
+                        }
+                        switch (data.type) {
+                            case 'system':
+                                addSystemMessage(data.data);
+                                break;
+                            case 'text_chunk':
+                                if (data.data) {
+                                    streamedContent += data.data;
+                                    scheduleRender();
+                                }
+                                break;
+                            case 'tool_call_start':
+                                addToolCall(data.data);
+                                break;
+                            case 'tool_call_result':
+                                addToolMessage(data.data);
+                                break;
+                            case 'tool_call_error':
+                                addToolCallError(data.data);
+                                break;
+                            case 'tool_calls_update':
+                                updateToolCalls(data.data);
+                                break;
+                            case 'end':
+                                if (bufferTimer) {
+                                    clearTimeout(bufferTimer);
+                                    bufferTimer = null;
+                                }
+                                renderStreamedContent();
+                                streamedContent = '';
+                                currentMessageDiv = null;
+                                isOutputting = false;
+                                updateInputState();
+                                break;
+                            case 'error':
+                                renderStreamedContent();
+                                addErrorMessage(data.data);
+                                streamedContent = '';
+                                currentMessageDiv = null;
+                                isOutputting = false;
+                                updateInputState();
+                                break;
+
+                        }
+                    } catch (e) {
+                        console.error('消息解析错误:', e);
+                    }
+                };
+
+                ws.onclose = () => {
+                    isOutputting = false;
+                    console.log('WebSocket连接关闭');
+                    addSystemMessage('连接已断开，正在尝试重新连接...');
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                ws.onerror = (error) => {
+                    isOutputting = false;
+                    console.error('WebSocket错误:', error);
+                    addSystemMessage('连接发生错误');
+                };
+            }
+
+            // 更新输入状态的函数
+            function updateInputState() {
+                const sendButton = document.getElementById('send-button');
+
+                if (isOutputting) {
+                    sendButton.disabled = true;
+                    sendButton.classList.add('disabled');
+                } else {
+                    sendButton.disabled = false;
+                    sendButton.classList.remove('disabled');
+                }
+            }
+
+            // 计划渲染（使用缓冲减少渲染次数）
+            function scheduleRender() {
+                if (bufferTimer) return;
+
+                bufferTimer = setTimeout(() => {
+                    renderStreamedContent();
+                    bufferTimer = null;
+                }, 50);
+            }
+
+            function isScrolledToBottom(container, threshold = 50) {
+                return container.scrollTop + container.offsetHeight + threshold >= container.scrollHeight;
+            }
+
+            // renderStreamedContent函数
+            function renderStreamedContent() {
+                if (!streamedContent) return;
+
+                // 获取当前滚动状态
+                const shouldScroll = isScrolledToBottom(chatMessages);
+
+                if (!currentMessageDiv) {
+                    currentMessageDiv = document.createElement('div');
+                    currentMessageDiv.className = 'message assistant-message';
+                    chatMessages.appendChild(currentMessageDiv);
+                }
+
+                currentMessageDiv.innerHTML = `
+                    <div class="message-content" id="current-stream">
+                        ${marked.parse(streamedContent)}
+                    </div>
+                `;
+
+                // // 高亮代码
+                // document.querySelectorAll('code').forEach(block => {
+                //     hljs.highlightElement(block);
+                // });
+
+                // 仅在用户已经在底部时才滚动
+                if (shouldScroll) {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            }
+            // 添加系统消息
+            function addSystemMessage(text) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message system-message';
+                messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // 添加错误消息
+            function addErrorMessage(text) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message error-message';
+                messageDiv.innerHTML = `<div class="message-content text-danger">
+                    <i class="fas fa-exclamation-circle me-2"></i>${text}
+                </div>`;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // 添加工具消息
+            function addToolMessage(content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message tool-message';
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <i class="fas fa-tools me-2"></i>
+                        <strong>工具调用结果:</strong>
+                        ${marked.parse(content)}
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // 添加工具调用错误
+            function addToolCallError(error) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message tool-message';
+                messageDiv.innerHTML = `
+                    <div class="message-content text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>工具调用错误:</strong> ${escapeHtml(error)}
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // 添加工具调用记录
+            function addToolCall(toolData) {
+                const toolCallDiv = document.createElement('div');
+                toolCallDiv.className = 'tool-call';
+                toolCallDiv.innerHTML = `
+                    <div>
+                        <span class="tool-name">${toolData.name}</span>
+                        <span class="tool-status processing-status">[处理中...]</span>
+                    </div>
+                    <div class="tool-args" title="${escapeHtml(toolData.args)}">
+                        ${truncate(escapeHtml(toolData.args), 60)}
+                    </div>
+                    <div class="tool-result">正在执行...</div>
+                `;
+                toolCallsContainer.prepend(toolCallDiv);
+            }
+
+            // 更新工具调用状态
+            function updateToolCalls(toolsData) {
+                toolCallsContainer.innerHTML = '';
+
+                // 只显示最近5个工具调用
+                const recentTools = toolsData.slice(-5);
+
+                recentTools.forEach(tool => {
+                    const statusClass =
+                        tool.status === 'processing' ? 'processing-status' :
+                            tool.status === 'completed' ? 'completed-status' : 'error-status';
+
+                    const toolCallDiv = document.createElement('div');
+                    toolCallDiv.className = 'tool-call';
+                    toolCallDiv.innerHTML = `
+                        <div>
+                            <span class="tool-name">${tool.name}</span>
+                            <span class="tool-status ${statusClass}">
+                                [${tool.status === 'processing' ? '处理中' :
+                            tool.status === 'completed' ? '完成' : '错误'}]
+                            </span>
+                        </div>
+                        <div class="tool-args" title="${escapeHtml(tool.arguments)}">
+                            ${truncate(escapeHtml(tool.arguments), 60)}
+                        </div>
+                        <div class="tool-result">
+                            ${tool.result ? escapeHtml(truncate(tool.result, 300)) :
+                            (tool.status === 'processing' ? '正在执行...' : '无结果')}
+                        </div>
+                    `;
+                    toolCallsContainer.appendChild(toolCallDiv);
+                });
+            }
+
+            // 发送消息
+            function sendMessage() {
+                if (isOutputting) return;
+                isOutputting = true;
+                updateInputState();
+                const message = messageInput.value.trim();
+                if (message) {
+                    // 添加用户消息
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message user-message';
+                    messageDiv.innerHTML = `<div class="message-content">${escapeHtml(message)}</div>`;
+                    chatMessages.appendChild(messageDiv);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                    // 发送到服务器
+                    ws.send(message);
+
+                    // 清空输入
+                    messageInput.value = '';
+
+                    // 重置流式状态
+                    streamedContent = '';
+                    currentMessageDiv = null;
+                }
+            }
+
+            // 辅助函数: 转义HTML
+            function escapeHtml(unsafe) {
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            // 辅助函数: 截断文本
+            function truncate(text, maxLength) {
+                if (!text) return '';
+                return text.length > maxLength
+                    ? text.substring(0, maxLength) + '...'
+                    : text;
+            }
+
+            // 事件监听
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    if (isOutputting) {
+                        e.preventDefault();
+                        return;
+                    }
+                    sendMessage();
+                }
+            });
+
+            // 初始化WebSocket连接
+            connectWebSocket();
+
+            // 聚焦输入框
+            messageInput.focus();
+
+            // 配置Markdown解析器
+            marked.setOptions({
+                highlight: function (code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                },
+                langPrefix: 'hljs language-',
+                breaks: true
+            });
+        });
     </script>
 </body>
+
 </html>
