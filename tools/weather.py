@@ -1,5 +1,4 @@
-
-# MCP\weather\weather.py
+# MCP\tools\weather.py
 from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
